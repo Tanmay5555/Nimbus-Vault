@@ -8,7 +8,7 @@ import { cn } from '@/utils/cn'
 
 export default function SubscriptionPage() {
     const router = useRouter()
-    const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
+    const [billingCycle, setBillingCycle] = useState('monthly')
 
     const plans = [
         {
@@ -59,7 +59,7 @@ export default function SubscriptionPage() {
                             className="w-12 h-6 bg-orange-500 rounded-full relative transition-colors focus:outline-none"
                             onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
                         >
-                            <div className={cn("absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform", billingCycle === 'yearly' && "translate-x-6")} />
+                            <div className={cn("absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform", billingCycle === 'yearly' ? "translate-x-6" : "")} />
                         </button>
                         <span className={cn("text-sm font-medium", billingCycle === 'yearly' ? "text-gray-900" : "text-gray-500")}>Yearly <span className="text-orange-500 text-xs">(Save 20%)</span></span>
                     </div>
@@ -116,7 +116,7 @@ export default function SubscriptionPage() {
                                         }
                                     } else {
                                         // Simulate processing
-                                        const btn = document.activeElement as HTMLButtonElement
+                                        const btn = document.activeElement
                                         const originalText = btn.innerText
                                         btn.innerText = "Processing..."
                                         btn.disabled = true
