@@ -11,13 +11,13 @@ import { cn } from '@/utils/cn'
 export default function ProfilePage() {
     const supabase = createClient()
     const router = useRouter()
-    const [user, setUser] = useState<any>(null)
+    const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
     const [fullName, setFullName] = useState('')
-    const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+    const [avatarUrl, setAvatarUrl] = useState(null)
     const [uploading, setUploading] = useState(false)
     const [updating, setUpdating] = useState(false)
-    const fileInputRef = useRef<HTMLInputElement>(null)
+    const fileInputRef = useRef(null)
 
     useEffect(() => {
         const getUser = async () => {
@@ -34,7 +34,7 @@ export default function ProfilePage() {
         getUser()
     }, [router, supabase])
 
-    const handleUpdateProfile = async (e: React.FormEvent) => {
+    const handleUpdateProfile = async (e) => {
         e.preventDefault()
         setUpdating(true)
 
@@ -51,7 +51,7 @@ export default function ProfilePage() {
         setUpdating(false)
     }
 
-    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleAvatarUpload = async (e) => {
         if (!e.target.files || e.target.files.length === 0) {
             return
         }
