@@ -11,30 +11,22 @@ import { cn } from '@/utils/cn'
 import { useToast } from '@/components/ui/toast'
 import { useTheme } from 'next-themes'
 import { Sun, Moon, LayoutGrid, List as ListIcon } from 'lucide-react'
-
-type FileObject = {
-    name: string
-    id: string
-    updated_at: string
-    created_at: string
-    last_accessed_at: string
-    metadata: Record<string, any>
-}
+import { ShareDialog } from '@/components/share-dialog'
 
 export default function Dashboard() {
     const supabase = createClient()
     const router = useRouter()
-    const [files, setFiles] = useState<FileObject[]>([])
-    const [folders, setFolders] = useState<FileObject[]>([])
+    const [files, setFiles] = useState([])
+    const [folders, setFolders] = useState([])
     const [uploading, setUploading] = useState(false)
-    const [user, setUser] = useState<any>(null)
-    const [currentPath, setCurrentPath] = useState<string[]>([])
+    const [user, setUser] = useState(null)
+    const [currentPath, setCurrentPath] = useState([])
     const [newFolderName, setNewFolderName] = useState('')
     const [isCreatingFolder, setIsCreatingFolder] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [isProfileOpen, setIsProfileOpen] = useState(false)
-    const fileInputRef = useRef<HTMLInputElement>(null)
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+    const fileInputRef = useRef(null)
+    const [viewMode, setViewMode] = useState('grid')
     const { addToast } = useToast()
     const { theme, setTheme } = useTheme()
 
@@ -44,8 +36,8 @@ export default function Dashboard() {
     const limitGB = 10
     const usagePercentage = Math.min((totalSizeGB / limitGB) * 100, 100)
 
-    const [view, setView] = useState<'files' | 'started' | 'recent' | 'trash'>('files')
-    const [starred, setStarred] = useState<string[]>([])
+    const [view, setView] = useState('files')
+    const [starred, setStarred] = useState([])
 
     // Load starred files from localStorage
     useEffect(() => {
@@ -55,7 +47,7 @@ export default function Dashboard() {
         }
     }, [])
 
-    const toggleStar = (fileName: string) => {
+    const toggleStar = (fileName) => {
         const newStarred = starred.includes(fileName)
             ? starred.filter(name => name !== fileName)
             : [...starred, fileName]
@@ -63,7 +55,7 @@ export default function Dashboard() {
         localStorage.setItem('starredFiles', JSON.stringify(newStarred))
     }
 
-    const fetchFiles = useCallback(async (userId: string, path: string[]) => {
+    const fetchFiles = useCallback(async (userId, path) => {
         let pathString = path.length > 0 ? `${userId}/${path.join('/')}/` : `${userId}/`
 
         // Adjust path for Trash view
@@ -121,7 +113,7 @@ export default function Dashboard() {
         getUser()
     }, [router, supabase, currentPath, fetchFiles])
 
-    const handleDelete = async (fileName: string) => {
+    const handleDelete = async (fileName) => {
         if (view === 'trash') {
             // Permanent Delete
             const { error } = await supabase.storage
@@ -143,34 +135,123 @@ export default function Dashboard() {
         }
     }
 
-    // ... (rest of existing code)
+    const [isDragging, setIsDragging] = useState(false)
 
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || e.target.files.length === 0) {
-            return
-        }
-
+    // Helper to process a single file upload
+    const processUpload = async (file, relativePath = '') => {
         setUploading(true)
-        const file = e.target.files[0]
         const pathString = currentPath.length > 0 ? `${currentPath.join('/')}/` : ''
-        const filePath = `${user.id}/${pathString}${file.name}`
+        // relativePath includes the folder structure (e.g. "Folder/Sub/")
+        const filePath = `${user.id}/${pathString}${relativePath}${file.name}`
 
         const { error: uploadError } = await supabase.storage
             .from('files')
             .upload(filePath, file)
 
         if (uploadError) {
-            addToast('Error uploading file!', 'error')
-            console.log(uploadError)
+            console.log("Upload error:", uploadError)
+            addToast(`Error uploading ${file.name}`, 'error')
         } else {
-            addToast('File uploaded successfully!', 'success')
-            fetchFiles(user.id, currentPath)
+            // We don't toast for every file in a huge batch, maybe just at end? 
+            // For now, simple toast is fine or we can optimize.
+            addToast(`Uploaded ${file.name}`, 'success')
+        }
+        // We defer fetching files until end of batch usually, but here we do it per file to be safe
+        // optimized: fetchFiles(user.id, currentPath) 
+        setUploading(false)
+    }
+
+    const handleUpload = async (e) => {
+        if (!e.target.files || e.target.files.length === 0) return
+        setUploading(true)
+        for (const file of e.target.files) {
+            await processUpload(file)
         }
         setUploading(false)
+        fetchFiles(user.id, currentPath)
         if (fileInputRef.current) fileInputRef.current.value = ''
     }
 
-    const handleCreateFolder = async (e: React.FormEvent) => {
+    // Recursive function to scan directories
+    const scanEntries = async (entry) => {
+        if (entry.isFile) {
+            return new Promise((resolve) => {
+                entry.file((file) => {
+                    resolve([{ file, path: '' }]) // path is relative to the *root of the drop*, handled by recursion caller mainly
+                })
+            })
+        } else if (entry.isDirectory) {
+            const dirReader = entry.createReader()
+
+            // readEntries needs to be looped if >100 items, keeping it simple for now
+            const entries = await new Promise((resolve, reject) => {
+                dirReader.readEntries(resolve, reject)
+            })
+
+            const results = []
+            for (const childEntry of entries) {
+                const childFiles = await scanEntries(childEntry)
+                // Append current directory name to the relative path of children
+                const processed = childFiles.map(item => ({
+                    file: item.file,
+                    path: entry.name + '/' + item.path
+                }))
+                results.push(...processed)
+            }
+            return results
+        }
+        return []
+    }
+
+    const handleDragOver = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(true)
+    }
+
+    const handleDragLeave = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (e.currentTarget.contains(e.relatedTarget)) return
+        setIsDragging(false)
+    }
+
+    const handleDrop = async (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(false)
+
+        const items = e.dataTransfer.items
+        if (!items) return
+
+        setUploading(true)
+        const queue = []
+
+        // 1. Scan all Dropped Items
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i]
+            if (item.kind === 'file') {
+                const entry = item.webkitGetAsEntry()
+                if (entry) {
+                    const scanned = await scanEntries(entry)
+                    queue.push(...scanned)
+                }
+            }
+        }
+
+        addToast(`Uploading ${queue.length} files...`, 'info')
+
+        // 2. Upload All
+        for (const item of queue) {
+            await processUpload(item.file, item.path)
+        }
+
+        setUploading(false)
+        fetchFiles(user.id, currentPath)
+        addToast('All files uploaded!', 'success')
+    }
+
+    const handleCreateFolder = async (e) => {
         e.preventDefault()
         if (!newFolderName.trim()) return
 
@@ -193,7 +274,7 @@ export default function Dashboard() {
         }
     }
 
-    const handleDownload = async (fileName: string) => {
+    const handleDownload = async (fileName) => {
         const pathString = currentPath.length > 0 ? `${currentPath.join('/')}/` : ''
         const { data, error } = await supabase.storage
             .from('files')
@@ -213,26 +294,20 @@ export default function Dashboard() {
         a.remove()
     }
 
-    const handleShare = async (fileName: string) => {
-        const pathString = currentPath.length > 0 ? `${currentPath.join('/')}/` : ''
-        const { data, error } = await supabase.storage
-            .from('files')
-            .createSignedUrl(`${user.id}/${pathString}${fileName}`, 3600)
+    const [shareDialogOpen, setShareDialogOpen] = useState(false)
+    const [fileToShare, setFileToShare] = useState(null)
 
-        if (data) {
-            await navigator.clipboard.writeText(data.signedUrl)
-            addToast('Share link copied to clipboard! (Valid for 1 hour)', 'success')
-        } else {
-            console.error(error)
-            addToast('Error creating share link', 'error')
-        }
+    const handleShare = (fileName) => {
+        const pathString = currentPath.length > 0 ? `${currentPath.join('/')}/` : ''
+        setFileToShare(`${pathString}${fileName}`)
+        setShareDialogOpen(true)
     }
 
-    const navigateToFolder = (folderName: string) => {
+    const navigateToFolder = (folderName) => {
         setCurrentPath([...currentPath, folderName])
     }
 
-    const navigateUp = (index: number) => {
+    const navigateUp = (index) => {
         if (index === -1) {
             setCurrentPath([])
         } else {
@@ -241,7 +316,7 @@ export default function Dashboard() {
     }
 
     // Helper for file icons and colors
-    const getFileIconAndColor = (fileName: string) => {
+    const getFileIconAndColor = (fileName) => {
         const ext = fileName.split('.').pop()?.toLowerCase() || ''
         if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) {
             return { icon: <div className="p-3 bg-green-100 rounded-xl"><FileIcon className="w-6 h-6 text-green-600" /></div>, color: 'text-green-600', bgColor: 'bg-green-100' }
@@ -265,7 +340,23 @@ export default function Dashboard() {
     if (!user) return <div className="h-screen flex items-center justify-center text-orange-500">Loading...</div>
 
     return (
-        <div className="flex h-screen bg-white font-sans overflow-hidden">
+        <div
+            className="flex h-screen bg-white font-sans overflow-hidden relative"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            {isDragging && (
+                <div className="absolute inset-0 z-[60] bg-orange-50/90 backdrop-blur-sm flex items-center justify-center p-8">
+                    <div className="border-4 border-dashed border-orange-400 rounded-3xl p-12 flex flex-col items-center justify-center bg-white shadow-2xl animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 bg-orange-100 rounded-full mb-6">
+                            <FolderIcon className="w-16 h-16 text-orange-600 animate-bounce" />
+                        </div>
+                        <h3 className="text-3xl font-bold text-gray-800 mb-2">Drop folders or files</h3>
+                        <p className="text-gray-500 text-lg">They will be uploaded to {currentPath.length > 0 ? currentPath[currentPath.length - 1] : 'Home'}</p>
+                    </div>
+                </div>
+            )}
             {/* Sidebar */}
             <aside className="w-64 border-r border-gray-100 flex flex-col bg-white flex-shrink-0">
                 <div className="p-6 flex items-center gap-2">
@@ -745,6 +836,11 @@ export default function Dashboard() {
                     </section>
                 </main>
             </div >
+            <ShareDialog
+                isOpen={shareDialogOpen}
+                onClose={() => setShareDialogOpen(false)}
+                filePath={fileToShare}
+            />
         </div >
     )
 }
