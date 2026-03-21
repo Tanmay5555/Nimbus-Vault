@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 export default function BillingPage() {
     const router = useRouter()
     const [isAddingCard, setIsAddingCard] = useState(false)
-    const [savedCards, setSavedCards] = useState<any[]>([])
+    const [savedCards, setSavedCards] = useState([])
     const [newCard, setNewCard] = useState({ number: '', expiry: '', cvc: '', name: '' })
     const [loading, setLoading] = useState(false)
 
@@ -23,7 +23,7 @@ export default function BillingPage() {
         }
     }, [])
 
-    const handleAddCard = (e: React.FormEvent) => {
+    const handleAddCard = (e) => {
         e.preventDefault()
         setLoading(true)
 
