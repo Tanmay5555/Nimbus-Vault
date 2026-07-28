@@ -4,9 +4,44 @@ import { cookies } from 'next/headers'
 export async function createClient() {
     const cookieStore = await cookies()
 
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    const isConfigured = Boolean(
+        url && 
+        key && 
+        !url.includes('placeholder') && 
+        !key.includes('placeholder')
+    )
+
+    if (!isConfigured) {
+        return {
+            auth: {
+                getUser: async () => ({ data: { user: null }, error: null }),
+                getSession: async () => ({ data: { session: null }, error: null }),
+            },
+            storage: {
+                from: () => ({
+                    list: async () => ({ data: [], error: null }),
+                })
+            },
+            from: () => ({
+                select: () => ({
+                    eq: () => ({
+                        single: async () => ({ data: null, error: null }),
+                        data: [],
+                        error: null
+                    }),
+                    data: [],
+                    error: null
+                })
+            })
+        }
+    }
+
     return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        url,
+        key,
         {
             cookies: {
                 getAll() {
@@ -19,8 +54,6 @@ export async function createClient() {
                         )
                     } catch {
                         // The `setAll` method was called from a Server Component.
-                        // This can be ignored if you have middleware refreshing
-                        // user sessions.
                     }
                 },
             },

@@ -25,22 +25,27 @@ export default function LoginPage() {
         setLoading(true)
         setError(null)
 
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        })
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            })
 
-        if (error) {
-            console.error('Login error:', error)
-            setError(error.message)
+            if (error) {
+                console.error('Login error:', error)
+                setError(error.message)
+                setLoading(false)
+                return
+            }
+
+            // Successful login
+            router.push('/')
+            router.refresh()
+        } catch (err) {
+            console.error('Login exception:', err)
+            setError(err.message || 'Failed to connect to authentication server. Please verify your Supabase credentials in .env.local.')
             setLoading(false)
-            return
         }
-
-
-        // Successful login
-        router.push('/')
-        router.refresh()
     }
 
     return (

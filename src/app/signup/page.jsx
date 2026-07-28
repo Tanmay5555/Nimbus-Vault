@@ -26,23 +26,29 @@ export default function SignupPage() {
         setError(null)
         setMessage(null)
 
-        const { error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                emailRedirectTo: `${location.origin}/auth/callback`,
-                data: {
-                    full_name: fullName,
+        try {
+            const { error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: `${location.origin}/auth/callback`,
+                    data: {
+                        full_name: fullName,
+                    },
                 },
-            },
-        })
+            })
 
-        if (error) {
-            setError(error.message)
-        } else {
-            setMessage('Check your email for the confirmation link.')
+            if (error) {
+                setError(error.message)
+            } else {
+                setMessage('Check your email for the confirmation link.')
+            }
+        } catch (err) {
+            console.error('Signup error:', err)
+            setError(err.message || 'Failed to connect to authentication server. Please verify your Supabase credentials in .env.local.')
+        } finally {
+            setLoading(false)
         }
-        setLoading(false)
     }
 
     return (
