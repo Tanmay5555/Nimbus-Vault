@@ -27,7 +27,7 @@ export async function POST(request) {
             passwordHash = await bcrypt.hash(password, 10)
         }
 
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('file_shares')
             .insert({
                 user_id: user.id,

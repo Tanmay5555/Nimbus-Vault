@@ -12,11 +12,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "NimbusVault",
-  description: "Secure Cloud Storage & AI Assistant",
+  title: "NimbusVault | Intelligent Cloud Storage & Time-Adaptive Vault",
+  description: "Secure Cloud Storage with Time-Adaptive Gradients & Built-in AI Assistant",
 };
 
 import { ThemeProvider } from "@/components/providers/theme-provider"
+import { TimeGradientProvider } from "@/components/providers/time-gradient-provider"
 import { ToastProvider } from "@/components/ui/toast"
 import { ChatWidget } from "@/components/chat-widget"
 
@@ -34,10 +35,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ToastProvider>
-            {children}
-            <ChatWidget />
-          </ToastProvider>
+          <TimeGradientProvider>
+            <ToastProvider>
+              {children}
+              <ChatWidget />
+            </ToastProvider>
+          </TimeGradientProvider>
         </ThemeProvider>
       </body>
     </html>
